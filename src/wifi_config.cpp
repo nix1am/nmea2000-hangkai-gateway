@@ -7,8 +7,8 @@
 // ==========================================
 // Внутреннее состояние
 // ==========================================
-static bool          apMode       = false;
-static String        currentSsid  = "";
+static bool          apMode        = false;
+static String        currentSsid   = "";
 static bool          rebootPending = false;
 static unsigned long rebootAt      = 0;
 
@@ -66,7 +66,6 @@ void wifiInit() {
     bool hasCreds = loadCredentials(ssid, pass);
 
     if (!hasCreds) {
-        // Первый запуск — пишем дефолт из wifi_config.h в NVS
         ssid = WIFI_DEFAULT_SSID;
         pass = WIFI_DEFAULT_PASSWORD;
         if (ssid.length() > 0 && ssid != "YOUR_WIFI_SSID") {
@@ -131,7 +130,7 @@ void wifiCheckPendingReboot() {
 }
 
 // ==========================================
-// HTML-страница /wifi
+// HTML-страница /wifi — стиль совпадает с дашбордом
 // ==========================================
 static const char WIFI_CONFIG_HTML[] PROGMEM = R"HTML(
 <!DOCTYPE html>
@@ -139,97 +138,184 @@ static const char WIFI_CONFIG_HTML[] PROGMEM = R"HTML(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>WiFi Config — Hangkai 30</title>
+<title>WiFi Settings — Hangkai 30 Gateway</title>
 <style>
- body{font-family:system-ui,-apple-system,sans-serif;background:#1a1a2e;color:#eee;margin:0 auto;padding:20px;max-width:520px}
- h1{color:#a855f7;font-size:1.4em;margin:0 0 14px}
- h2{color:#a855f7;font-size:1.05em;margin:0 0 14px}
- .card{background:#16213e;border-radius:10px;padding:20px;margin-bottom:15px;box-shadow:0 2px 8px rgba(0,0,0,.3)}
- label{display:block;margin-bottom:6px;color:#aaa;font-size:.9em}
- input{width:100%;padding:10px;border-radius:4px;border:1px solid #333;background:#0f0f23;color:#eee;box-sizing:border-box;margin-bottom:14px;font-size:1em}
- input:focus{outline:none;border-color:#a855f7}
- button{background:#a855f7;color:#fff;border:none;padding:12px 20px;border-radius:4px;cursor:pointer;font-size:1em;width:100%;font-weight:600}
- button:hover{background:#9333ea}
- button.danger{background:#dc2626}
- button.danger:hover{background:#b91c1c}
- .info{background:#16213e;border-radius:10px;padding:12px 16px;font-size:.88em;color:#aaa;margin-bottom:15px}
- .info strong{color:#eee}
- .msg{margin-top:12px;font-size:.92em}
- .ok{color:#22c55e}
- .err{color:#ef4444}
+:root{
+  --bg:#0f172a;
+  --bg-card:#1e293b;
+  --bg-input:#0b1220;
+  --text:#e2e8f0;
+  --text-dim:#94a3b8;
+  --border:#334155;
+  --primary:#8b5cf6;
+  --primary-hover:#7c3aed;
+  --danger:#ef4444;
+  --success:#22c55e;
+}
+*{box-sizing:border-box}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  background:var(--bg);color:var(--text);margin:0;
+  padding:20px;padding-bottom:60px;min-height:100vh;
+}
+.container{max-width:560px;margin:0 auto}
+h1{color:var(--primary);font-size:1.5em;margin:0 0 20px}
+.back-link{
+  display:inline-block;color:var(--primary);text-decoration:none;
+  margin-bottom:16px;font-size:0.9em
+}
+.back-link:hover{text-decoration:underline}
+.card{
+  background:var(--bg-card);border-radius:12px;padding:20px;
+  margin-bottom:16px;box-shadow:0 4px 12px rgba(0,0,0,.25)
+}
+.card h2{margin:0 0 16px;font-size:1.05em;color:var(--text)}
+.status-row{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:8px 0;border-bottom:1px solid var(--border)
+}
+.status-row:last-child{border:none}
+.status-row .k{color:var(--text-dim);font-size:.92em}
+.status-row .v{color:var(--text);font-weight:500}
+.mode-badge{
+  display:inline-block;padding:2px 10px;border-radius:999px;
+  font-size:.8em;font-weight:600
+}
+.mode-badge.sta{background:rgba(34,197,94,.15);color:var(--success)}
+.mode-badge.ap{background:rgba(239,68,68,.15);color:var(--danger)}
+label{display:block;margin-bottom:6px;color:var(--text-dim);font-size:.9em}
+input{
+  width:100%;padding:12px;border-radius:8px;border:1px solid var(--border);
+  background:var(--bg-input);color:var(--text);font-size:1em;
+  margin-bottom:14px;transition:border-color .15s
+}
+input:focus{outline:none;border-color:var(--primary)}
+button{
+  background:var(--primary);color:#fff;border:none;padding:12px 20px;
+  border-radius:8px;cursor:pointer;font-size:1em;width:100%;
+  font-weight:600;transition:background .15s
+}
+button:hover{background:var(--primary-hover)}
+button.danger{background:var(--danger)}
+button.danger:hover{background:#dc2626}
+.msg{margin-top:12px;font-size:.92em;min-height:1.2em}
+.msg.ok{color:var(--success)}
+.msg.err{color:var(--danger)}
+code{background:var(--bg-input);padding:2px 6px;border-radius:4px;font-size:.9em;color:var(--primary)}
+.hint{color:var(--text-dim);font-size:.9em;margin-top:0;line-height:1.5}
+.dash-footer{
+  position:fixed;bottom:0;left:0;right:0;
+  background:rgba(15,23,42,.95);backdrop-filter:blur(8px);
+  border-top:1px solid var(--border);
+  padding:8px 16px;display:flex;justify-content:space-between;
+  align-items:center;font-size:12px;color:var(--text-dim);
+  z-index:9999;font-family:system-ui,sans-serif;flex-wrap:wrap;gap:8px
+}
+.dash-footer span{color:var(--text)}
+.dash-footer .dot{
+  display:inline-block;width:8px;height:8px;border-radius:50%;
+  background:var(--success);margin-right:6px;animation:pulse 2s infinite
+}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 </style>
 </head>
 <body>
-<h1>🔧 WiFi Config</h1>
+<div class="container">
+    <a class="back-link" href="/">← Назад к дашборду</a>
+    <h1>⚙ WiFi Settings</h1>
 
-<div class="info">
-  <div>Режим: <strong>%MODE%</strong></div>
-  <div>SSID: <strong>%SSID%</strong></div>
-  <div>IP: <strong>%IP%</strong></div>
+    <div class="card">
+        <h2>Состояние</h2>
+        <div class="status-row">
+            <span class="k">Режим</span>
+            <span class="v"><span class="mode-badge %MODE_CLS%">%MODE%</span></span>
+        </div>
+        <div class="status-row"><span class="k">SSID</span><span class="v">%SSID%</span></div>
+        <div class="status-row"><span class="k">IP</span><span class="v">%IP%</span></div>
+        <div class="status-row"><span class="k">MAC</span><span class="v">%MAC%</span></div>
+        <div class="status-row"><span class="k">Uptime</span><span class="v" id="uptime">—</span></div>
+    </div>
+
+    <div class="card">
+        <h2>Подключиться к другой сети</h2>
+        <form id="f">
+            <label>SSID</label>
+            <input id="ssid" name="ssid" placeholder="MyHomeNetwork" required maxlength="32" autocomplete="off">
+            <label>Пароль</label>
+            <input id="pass" name="pass" type="password" placeholder="password" maxlength="64" autocomplete="off">
+            <button type="submit">Сохранить и перезагрузить</button>
+        </form>
+        <div id="msg" class="msg"></div>
+    </div>
+
+    <div class="card">
+        <h2>Сброс</h2>
+        <p class="hint">
+            Удаляет сохранённые SSID/пароль из NVS. После перезагрузки
+            устройство поднимется в AP-режиме <code>%APSSID%</code> / <code>%APPASS%</code>.
+        </p>
+        <button class="danger" id="reset">Очистить и перезагрузить</button>
+    </div>
 </div>
 
-<div class="card">
-  <h2>Подключиться к сети</h2>
-  <form id="f">
-    <label>SSID</label>
-    <input id="ssid" name="ssid" placeholder="MyHomeNetwork" required maxlength="32" autocomplete="off">
-    <label>Пароль</label>
-    <input id="pass" name="pass" type="password" placeholder="password" maxlength="64" autocomplete="off">
-    <button type="submit">Сохранить и перезагрузить</button>
-  </form>
-  <div id="msg" class="msg"></div>
-</div>
-
-<div class="card">
-  <h2>Сброс</h2>
-  <p style="color:#aaa;font-size:.9em;margin-top:0">
-    Удаляет сохранённые SSID/пароль. После перезагрузки устройство поднимется в AP-режиме
-    <code>%APSSID%</code> / <code>%APPASS%</code>.
-  </p>
-  <button class="danger" id="reset">Очистить и перезагрузить</button>
+<div class="dash-footer">
+    <div><span class="dot"></span>Device: <span>%IP%</span></div>
+    <div>MAC: <span>%MAC%</span></div>
 </div>
 
 <script>
 const msg = document.getElementById('msg');
-function show(text, cls){ msg.textContent = text; msg.className = 'msg ' + cls; }
+function show(t,c){ msg.textContent = t; msg.className = 'msg ' + c; }
 
 document.getElementById('f').addEventListener('submit', async e => {
-  e.preventDefault();
-  show('Сохранение…', '');
-  try {
-    const body = 'ssid=' + encodeURIComponent(document.getElementById('ssid').value)
-               + '&pass=' + encodeURIComponent(document.getElementById('pass').value);
-    const r = await fetch('/api/wifi', {
-      method:'POST',
-      headers:{'Content-Type':'application/x-www-form-urlencoded'},
-      body
-    });
-    if (r.ok) {
-      show('✓ Сохранено. Перезагрузка…', 'ok');
-      setTimeout(() => location.href = '/', 5000);
-    } else {
-      show('✗ Ошибка: ' + r.status + ' ' + await r.text(), 'err');
-    }
-  } catch (err) {
-    show('✗ ' + err.message, 'err');
-  }
+    e.preventDefault();
+    show('Сохранение…','');
+    try{
+        const body = 'ssid=' + encodeURIComponent(document.getElementById('ssid').value)
+                   + '&pass=' + encodeURIComponent(document.getElementById('pass').value);
+        const r = await fetch('/api/wifi',{
+            method:'POST',
+            headers:{'Content-Type':'application/x-www-form-urlencoded'},
+            body
+        });
+        if(r.ok){
+            show('✓ Сохранено. Перезагрузка…','ok');
+            setTimeout(()=>location.href='/',5000);
+        } else {
+            show('✗ Ошибка: ' + r.status,'err');
+        }
+    }catch(err){ show('✗ ' + err.message,'err'); }
 });
 
 document.getElementById('reset').addEventListener('click', async () => {
-  if (!confirm('Удалить сохранённые WiFi-данные и перезагрузить?')) return;
-  show('Очистка…', '');
-  try {
-    const r = await fetch('/api/wifi/reset', {method:'POST'});
-    if (r.ok) {
-      show('✓ Очищено. Перезагрузка…', 'ok');
-      setTimeout(() => location.href = '/', 5000);
-    } else {
-      show('✗ Ошибка: ' + r.status, 'err');
-    }
-  } catch (err) {
-    show('✗ ' + err.message, 'err');
-  }
+    if(!confirm('Удалить сохранённые WiFi-данные и перезагрузить?')) return;
+    show('Очистка…','');
+    try{
+        const r = await fetch('/api/wifi/reset',{method:'POST'});
+        if(r.ok){
+            show('✓ Очищено. Перезагрузка…','ok');
+            setTimeout(()=>location.href='/',5000);
+        } else {
+            show('✗ Ошибка: ' + r.status,'err');
+        }
+    }catch(err){ show('✗ ' + err.message,'err'); }
 });
+
+// live uptime
+function fmt(s){
+    const d=Math.floor(s/86400), h=Math.floor((s%86400)/3600),
+          m=Math.floor((s%3600)/60), sec=s%60;
+    return (d>0 ? d+'d ' : '') +
+           (h<10?'0':'')+h + ':' +
+           (m<10?'0':'')+m + ':' +
+           (sec<10?'0':'')+sec;
+}
+function upd(){
+    fetch('/api/status').then(r=>r.json()).then(d=>{
+        document.getElementById('uptime').textContent = fmt(d.uptime);
+    }).catch(()=>{});
+}
+upd(); setInterval(upd, 5000);
 </script>
 </body>
 </html>
@@ -239,18 +325,23 @@ document.getElementById('reset').addEventListener('click', async () => {
 // HTTP-обработчики
 // ==========================================
 void wifiRegisterWebHandlers(AsyncWebServer& server) {
-    // GET /wifi — страница конфигурации
+    // GET /wifi
     server.on("/wifi", HTTP_GET, [](AsyncWebServerRequest* req) {
         String html = String(WIFI_CONFIG_HTML);
-        html.replace("%MODE%",  wifiIsAPMode() ? "AP (настройка)" : "STA (подключено)");
-        html.replace("%SSID%",  wifiCurrentSSID());
-        html.replace("%IP%",    wifiLocalIP());
-        html.replace("%APSSID%", WIFI_AP_SSID);
-        html.replace("%APPASS%", WIFI_AP_PASSWORD);
+        bool isAp = wifiIsAPMode();
+
+        html.replace("%MODE%",     isAp ? "AP (настройка)" : "STA (подключено)");
+        html.replace("%MODE_CLS%", isAp ? "ap" : "sta");
+        html.replace("%SSID%",     wifiCurrentSSID());
+        html.replace("%IP%",       wifiLocalIP());
+        html.replace("%MAC%",      WiFi.macAddress());
+        html.replace("%APSSID%",   WIFI_AP_SSID);
+        html.replace("%APPASS%",   WIFI_AP_PASSWORD);
+
         req->send(200, "text/html; charset=utf-8", html);
     });
 
-    // POST /api/wifi — сохранить новые creds
+    // POST /api/wifi
     server.on("/api/wifi", HTTP_POST, [](AsyncWebServerRequest* req) {
         if (!req->hasParam("ssid", true)) {
             req->send(400, "text/plain; charset=utf-8", "missing ssid");
@@ -269,14 +360,13 @@ void wifiRegisterWebHandlers(AsyncWebServer& server) {
             req->send(500, "text/plain; charset=utf-8", "nvs write failed");
             return;
         }
-
         Serial.printf("WiFi credentials updated. SSID=\"%s\". Rebooting...\n",
                       ssid.c_str());
         req->send(200, "text/plain; charset=utf-8", "ok");
         scheduleReboot(1500);
     });
 
-    // POST /api/wifi/reset — очистить NVS
+    // POST /api/wifi/reset
     server.on("/api/wifi/reset", HTTP_POST, [](AsyncWebServerRequest* req) {
         clearCredentials();
         Serial.println("WiFi credentials cleared. Rebooting...");

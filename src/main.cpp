@@ -3,13 +3,12 @@
 #include <ESPAsyncWebServer.h>
 #include "ESPDashboardPlus.h"
 #include "dashboard_html.h"
-#include "wifi_config.h"           // WiFi через NVS + AP-fallback
+#include "wifi_config.h"
+#include "relay_config.h"          // <-- ДОБАВЛЕНО: 4-канальный релейный модуль
 
 // ==========================================
 // RGB-СВЕТОДИОД (ESP32-S3-DevKitC-1, WS2812)
 // ==========================================
-// На официальной плате RGB LED подключён к GPIO48.
-// На клонах может быть GPIO38 или GPIO21 — проверьте свою плату!
 #define RGB_LED_PIN 48
 
 // ==========================================
@@ -151,13 +150,18 @@ void setup() {
   pinMode(PIN_RPM_SENSE, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(PIN_RPM_SENSE), rpmISR, FALLING);
 
-  // 3. WiFi (NVS + STA + AP-fallback)
+  // 3. Реле — инициализация GPIO и восстановление из NVS
+  relayInit();
+
+  // 4. WiFi (NVS + STA + AP-fallback)
   wifiInit();
 
-  // 4. Регистрируем /wifi и /api/wifi ДО dashboard.begin()
+  // 5. Веб-обработчики — регистрируем ДО dashboard.begin(),
+  //    чтобы маршруты точно не перекрылись
   wifiRegisterWebHandlers(server);
+  relayRegisterWebHandlers(server);
 
-  // 5. Веб-дашборд
+  // 6. Веб-дашборд
   dashboard.begin(&server, DASHBOARD_HTML_DATA, DASHBOARD_HTML_SIZE);
 
   StatCard* rpmCard = dashboard.addStatCard("rpm", "Engine RPM", "0", "RPM");
@@ -174,14 +178,16 @@ void setup() {
   server.begin();
 
   if (wifiIsStaConnected()) {
-    Serial.printf("Dashboard ready at http://%s\n",   WiFi.localIP().toString().c_str());
-    Serial.printf("WiFi config at  http://%s/wifi\n",  WiFi.localIP().toString().c_str());
+    Serial.printf("Dashboard ready at http://%s\n",     WiFi.localIP().toString().c_str());
+    Serial.printf("Relay control  at http://%s/relay\n", WiFi.localIP().toString().c_str());
+    Serial.printf("WiFi config    at http://%s/wifi\n",  WiFi.localIP().toString().c_str());
   } else {
-    Serial.printf("AP mode. Dashboard ready at http://%s\n",  WiFi.softAPIP().toString().c_str());
-    Serial.printf("AP mode. WiFi config at  http://%s/wifi\n", WiFi.softAPIP().toString().c_str());
+    Serial.printf("AP mode. Dashboard at http://%s\n",     WiFi.softAPIP().toString().c_str());
+    Serial.printf("AP mode. Relay     at http://%s/relay\n", WiFi.softAPIP().toString().c_str());
+    Serial.printf("AP mode. WiFi cfg  at http://%s/wifi\n",  WiFi.softAPIP().toString().c_str());
   }
 
-  // 6. NMEA 2000 (не критично)
+  // 7. NMEA 2000 (не критично)
   NMEA2000.SetProductInformation("123456", 100, "Hangkai 30 Gateway", "1.0.0", "1.0.0");
   NMEA2000.SetDeviceInformation(1, 130, 20, 2046);
   NMEA2000.SetMode(tNMEA2000::N2km_NodeOnly, 22);
@@ -205,10 +211,7 @@ void setup() {
 // ОСНОВНОЙ ЦИКЛ (LOOP)
 // ==========================================
 void loop() {
-  // Проверка отложенной перезагрузки после смены WiFi-creds
   wifiCheckPendingReboot();
-
-  // Дашборд
   dashboard.loop();
 
   // Мигание фиолетовым LED (heartbeat) — работает всегда
